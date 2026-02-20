@@ -1,7 +1,7 @@
 {
   "name": "platorelay-api",
   "version": "1.0.0",
-  "main": "api/platorelay.js",
+  "main": "api/index.js",
   "scripts": {
     "dev": "vercel dev"
   },
