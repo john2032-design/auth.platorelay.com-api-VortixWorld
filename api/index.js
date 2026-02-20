@@ -1,5 +1,9 @@
 // api/index.js (directory: api/)
 const cheerio = require('cheerio');
+const axios = require('axios');
+const { wrapper } = require('axios-cookiejar-support');
+const { CookieJar } = require('tough-cookie');
+
 const getCurrentTime = () => process.hrtime.bigint();
 const formatDuration = (startNs, endNs = process.hrtime.bigint()) => {
   const durationNs = Number(endNs - startNs);
@@ -136,24 +140,22 @@ const SHAPE_KEYWORDS = ["circle", "square", "triangle", "rectangle", "hexagon", 
 const COLOR_KEYWORDS = ["red", "orange", "yellow", "green", "blue", "purple", "white", "black", "gray"];
 
 function genFingerprint() {
-  const val = Math.floor(Math.random() * 0xFFFFFFFF) - 0x80000000;
-  const hex = Math.abs(val).toString(16).padStart(8, '0');
-  return val >= 0 ? hex : `-${hex}`;
+  return "-419fd23c";
 }
 
 function genTelemetry(dwellMs) {
-  const moves = Math.floor(Math.random() * 141) + 180;
-  const speedMin = +(Math.random() * 0.0045 + 0.0005).toFixed(15);
-  const speedMax = +(Math.random() * 8 + 8).toFixed(15);
-  const speedMedian = +(Math.random() * 0.3 + 0.15).toFixed(15);
-  const speedAvg = +(Math.random() * 0.5 + 0.45).toFixed(15);
-  const speedP25 = +(Math.random() * 0.1 + 0.05).toFixed(15);
-  const speedP75 = +(Math.random() * 0.4 + 0.55).toFixed(15);
-  const velVar = +(Math.random() * 2 + 1).toFixed(15);
-  const dirChanges = Math.floor(Math.random() * 5) + 1;
-  const moveDensity = +(moves / (dwellMs / 1000)).toFixed(4);
+  const moves = Math.floor(Math.random() * (320 - 180 + 1)) + 180;
+  const speedMin = Number((Math.random() * (0.005 - 0.0005) + 0.0005).toFixed(15));
+  const speedMax = Number((Math.random() * (16.0 - 8.0) + 8.0).toFixed(15));
+  const speedMedian = Number((Math.random() * (0.45 - 0.15) + 0.15).toFixed(15));
+  const speedAvg = Number((Math.random() * (0.95 - 0.45) + 0.45).toFixed(15));
+  const speedP25 = Number((Math.random() * (0.15 - 0.05) + 0.05).toFixed(15));
+  const speedP75 = Number((Math.random() * (0.95 - 0.55) + 0.55).toFixed(15));
+  const velVar = Number((Math.random() * (3.0 - 1.0) + 1.0).toFixed(15));
+  const dirChanges = Math.floor(Math.random() * (5 - 1 + 1) + 1);
+  const moveDensity = Number((moves / (dwellMs / 1000)).toFixed(4));
   return {
-    dwellMs: +dwellMs.toFixed(1),
+    dwellMs: Number(dwellMs.toFixed(1)),
     moves,
     velocityVar: velVar,
     velocityMedian: speedMedian,
@@ -170,11 +172,11 @@ function genTelemetry(dwellMs) {
 }
 
 function genPath(dwellMs) {
-  const clickTs = +(dwellMs + Math.random() * 250 - 200).toFixed(1);
-  const totalDist = +(Math.random() * 320 + 80).toFixed(1);
-  const durationMs = +(Math.random() * 80 + 40).toFixed(1);
-  const moves = Math.floor(Math.random() * 4) + 1;
-  const avgSpeed = durationMs > 0 ? +(totalDist / durationMs).toFixed(4) : 0;
+  const clickTs = Number((dwellMs + Math.random() * (50 - (-200)) + (-200)).toFixed(1));
+  const totalDist = Number((Math.random() * (400 - 80) + 80).toFixed(1));
+  const durationMs = Number((Math.random() * (120 - 40) + 40).toFixed(1));
+  const moves = Math.floor(Math.random() * (4 - 1 + 1) + 1);
+  const avgSpeed = durationMs > 0 ? Number((totalDist / durationMs).toFixed(4)) : 0;
   return {
     moves,
     totalDist,
@@ -186,8 +188,8 @@ function genPath(dwellMs) {
 }
 
 function genVerifyMeta(numStages) {
-  const baseDwell = Math.random() * 10000 + 10000;
-  const extraDwell = (numStages - 1) * (Math.random() * 5000 + 5000);
+  const baseDwell = Math.random() * (20000 - 10000) + 10000;
+  const extraDwell = (numStages - 1) * (Math.random() * (10000 - 5000) + 5000);
   const dwellMs = baseDwell + extraDwell;
   const path = genPath(dwellMs);
   const telemetry = genTelemetry(dwellMs);
@@ -219,13 +221,13 @@ const BASE_HEADERS = {
   'Content-Type': 'application/json',
   'Host': 'sentry.platorelay.com',
   'Origin': 'https://sentry.platorelay.com',
-  'sec-ch-ua': '"Not:A-Brand";v="99", "Google Chrome";v="125", "Chromium";v="125"',
+  'sec-ch-ua': '"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"',
   'sec-ch-ua-mobile': '?0',
   'sec-ch-ua-platform': '"Windows"',
   'Sec-Fetch-Dest': 'empty',
   'Sec-Fetch-Mode': 'cors',
   'Sec-Fetch-Site': 'same-origin',
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36',
 };
 
 async function handlePlatorelay(axios, url, handlerStart, res, incomingUserId) {
@@ -335,10 +337,12 @@ module.exports = async (req, res) => {
     return sendError(res, 400, 'URL must start with http:// or https://', handlerStart);
   }
   if (!axiosInstance) {
-    axiosInstance = require('axios').create({
+    const jar = new CookieJar();
+    axiosInstance = wrapper(axios.create({
       timeout: 90000,
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; BypassBot/2.0)' }
-    });
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36' },
+      jar
+    }));
   }
   const axios = axiosInstance;
   const hostname = extractHostname(url);
