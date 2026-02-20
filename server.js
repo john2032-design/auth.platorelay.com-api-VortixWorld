@@ -1,4 +1,3 @@
-// server.js (directory: root)
 const express = require('express');
 const bodyParser = require('body-parser');
 const handler = require('./platorelay');
