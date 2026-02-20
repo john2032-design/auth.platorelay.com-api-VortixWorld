@@ -240,10 +240,6 @@ async function handlePlatorelay(axios, url, handlerStart, res, incomingUserId) {
   let isAndroid = title === 'Delta Android Keysystem';
   let isIos = title === 'Delta iOS Keysystem';
   await new Promise(r => setTimeout(r, 5000));
-  const button = $('button.inline-flex');
-  if (button.length === 0) {
-    return sendError(res, 500, 'Button not found', handlerStart);
-  }
   let sentryUrl = 'https://sentry.platorelay.com/a?d=' + encodeURIComponent(new URL(url).searchParams.get('d') || '');
   let d = new URL(sentryUrl).searchParams.get('d') || '';
   const referer = `https://sentry.platorelay.com/a?d=${d}`;
@@ -316,10 +312,6 @@ async function handlePlatorelay(axios, url, handlerStart, res, incomingUserId) {
   const finalHtml = response.data;
   await new Promise(r => setTimeout(r, 5000));
   const $final = cheerio.load(finalHtml);
-  const continueButton = $final('button:contains("Continue"), button:contains("Lootlabs")');
-  if (continueButton.length === 0) {
-    return sendError(res, 500, 'Final continue button not found', handlerStart);
-  }
   const keyText = $final('div#keyText').text().trim();
   if (!keyText.startsWith('FREE_')) {
     return sendError(res, 500, 'Invalid key format', handlerStart);
