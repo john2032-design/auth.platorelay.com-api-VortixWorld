@@ -1,9 +1,8 @@
-# app.py (directory: root)
 from flask import Flask, request, jsonify, render_template
 import time
-from pow_client import handle_platorelay
 import re
 from urllib.parse import urlparse
+from pow_client import handle_platorelay
 
 app = Flask(__name__)
 
@@ -53,22 +52,31 @@ def send_success(result, user_id, start_time):
     'time_taken': format_duration(start_time)
   })
 
+def set_cors_headers(resp):
+  resp.headers['Access-Control-Allow-Origin'] = '*'
+  resp.headers['Access-Control-Allow-Methods'] = 'GET,POST,OPTIONS'
+  resp.headers['Access-Control-Allow-Headers'] = 'Content-Type,x-user-id,x_user_id,x-userid,x-api-key'
+  return resp
+
 @app.route('/', methods=['GET', 'POST', 'OPTIONS'])
 def index():
   start_time = get_current_time()
   if request.method == 'OPTIONS':
     resp = jsonify({})
-    resp.headers['Access-Control-Allow-Origin'] = '*'
-    resp.headers['Access-Control-Allow-Methods'] = 'GET,POST,OPTIONS'
-    resp.headers['Access-Control-Allow-Headers'] = 'Content-Type,x-user-id,x_user_id,x-userid,x-api-key'
+    set_cors_headers(resp)
     return resp, 200
 
   url = request.args.get('url') if request.method == 'GET' else (request.json.get('url') if request.is_json else None)
   if not url or not isinstance(url, str):
-    return send_error(400, 'Missing URL parameter', start_time)
+    resp = send_error(400, 'Missing URL parameter', start_time)[0]
+    set_cors_headers(resp)
+    return resp, 400
+
   url = sanitize_url(url)
   if not re.match(r'^https?://', url, re.I):
-    return send_error(400, 'URL must start with http:// or https://', start_time)
+    resp = send_error(400, 'URL must start with http:// or https://', start_time)[0]
+    set_cors_headers(resp)
+    return resp, 400
 
   incoming_user_id = get_user_id(request)
   user_key = incoming_user_id or request.remote_addr or 'anonymous'
@@ -80,12 +88,11 @@ def index():
   times.append(now)
   USER_RATE_LIMIT[user_key] = times
   if len(times) > CONFIG['MAX_REQUESTS_PER_WINDOW']:
-    return send_error(429, 'Rate limit reached', start_time)
+    resp = send_error(429, 'Rate limit reached', start_time)[0]
+    set_cors_headers(resp)
+    return resp, 429
 
   result = handle_platorelay(url, incoming_user_id)
   resp = jsonify(result)
-  resp.headers['Access-Control-Allow-Origin'] = '*'
+  set_cors_headers(resp)
   return resp
-
-if __name__ == '__main__':
-  app.run(host='0.0.0.0', port=3000)
