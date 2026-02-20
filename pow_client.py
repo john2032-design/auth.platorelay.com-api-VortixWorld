@@ -203,33 +203,33 @@ def handle_platorelay(url, incoming_user_id):
     return {"status": "success", "result": key, "x_user_id": incoming_user_id or "", "time_taken": format_duration(get_current_time())}
 
 def get_api_chain(hostname):
-  for host, apis in HOST_RULES.items():
-    if hostname == host or hostname.endswith('.' + host):
-      return apis.copy()
-  return []
+    for host, apis in HOST_RULES.items():
+        if hostname == host or hostname.endswith('.' + host):
+            return apis.copy()
+    return []
 
 def execute_api_chain(url, api_names):
-  for name in api_names:
-    if name == 'abysm':
-      result = try_abysm(url)
-      if result['success']:
-        return result
-  return {"success": False, "error": "All bypasses failed"}
+    for name in api_names:
+        if name == 'abysm':
+            result = try_abysm(url)
+            if result['success']:
+                return result
+    return {"success": False, "error": "All bypasses failed"}
 
 def try_abysm(url):
-  try:
-    res = requests.get('https://api.abysm.lat/v2/bypass', params={'url': url}, headers={'x-api-key': 'ABYSM-185EF369-E519-4670-969E-137F07BB52B8'})
-    d = res.json()
-    if d.get('status') == 'success' and d.get('data', {}).get('result'):
-      return {"success": True, "result": d['data']['result']}
-    if d.get('result'):
-      return {"success": True, "result": d['result']}
-    error_msg = d.get('error') or d.get('message') or None
-    if error_msg and any(x in error_msg.lower() for x in ['error', 'fail', 'failed']):
-      error_msg = 'Bypass Failed'
-    return {"success": False, "error": error_msg}
-  except Exception as e:
-    error_msg = str(e)
-    if any(x in error_msg.lower() for x in ['error', 'fail', 'failed']):
-      error_msg = 'Bypass Failed'
-    return {"success": False, "error": error_msg}
+    try:
+        res = requests.get('https://api.abysm.lat/v2/bypass', params={'url': url}, headers={'x-api-key': 'ABYSM-185EF369-E519-4670-969E-137F07BB52B8'})
+        d = res.json()
+        if d.get('status') == 'success' and d.get('data', {}).get('result'):
+            return {"success": True, "result": d['data']['result']}
+        if d.get('result'):
+            return {"success": True, "result": d['result']}
+        error_msg = d.get('error') or d.get('message') or None
+        if error_msg and any(x in error_msg.lower() for x in ['error', 'fail', 'failed']):
+            error_msg = 'Bypass Failed'
+        return {"success": False, "error": error_msg}
+    except Exception as e:
+        error_msg = str(e)
+        if any(x in error_msg.lower() for x in ['error', 'fail', 'failed']):
+            error_msg = 'Bypass Failed'
+        return {"success": False, "error": error_msg}
