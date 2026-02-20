@@ -287,37 +287,38 @@ function analyzeShape(b64String) {
     const buffer = Buffer.from(rawB64, 'base64');
     let img = cv.imdecode(buffer, cv.IMREAD_UNCHANGED);
     if (img.empty) return EMPTY;
-    let bgr;
+    let bgr = new cv.Mat();
     if (img.channels() === 1) {
-      bgr = img.cvtColor(cv.COLOR_GRAY2BGR);
+      cv.cvtColor(img, bgr, cv.COLOR_GRAY2BGR);
     } else if (img.channels() === 4) {
-      const channels = img.split();
-      const alpha = channels[3].convertTo(cv.CV_32F).div(255);
-      const rgb = img.getRegion(new cv.Rect(0, 0, img.cols, img.rows)).cvtColor(cv.COLOR_BGRA2RGB).convertTo(cv.CV_32F);
-      const white = new cv.Mat(img.rows, img.cols, cv.CV_32FC3, new cv.Vec3(255, 255, 255));
-      const oneMinusAlpha = white.sub(alpha);
-      const comp = rgb.mul(alpha).add(white.mul(oneMinusAlpha)).convertTo(cv.CV_8U);
-      bgr = comp.cvtColor(cv.COLOR_RGB2BGR);
+      cv.cvtColor(img, bgr, cv.COLOR_BGRA2BGR);
     } else {
-      bgr = img;
+      bgr = img.clone();
     }
-    const gray = bgr.cvtColor(cv.COLOR_BGR2GRAY);
+    const gray = new cv.Mat();
+    cv.cvtColor(bgr, gray, cv.COLOR_BGR2GRAY);
     const cnt = extractShapeContour(bgr, gray);
     if (!cnt) return { ...EMPTY, type: 'no_contour' };
     const area = cv.contourArea(cnt);
     if (area < 10) return EMPTY;
     const {shape, vertices, circularity} = classify(cnt);
-    const hull = cnt.convexHull(false);
+    const hull = new cv.Mat();
+    cv.convexHull(cnt, hull, false, true);
     const hullArea = cv.contourArea(hull);
     const bounding = cnt.boundingRect();
     const bboxArea = bounding.width * bounding.height;
-    const fmask = new cv.Mat(gray.rows, gray.cols, cv.CV_8U, 0);
-    const contoursMat = new cv.MatVector();
-    contoursMat.push_back(cnt);
-    cv.drawContours(fmask, contoursMat, -1, 255, cv.FILLED);
-    contoursMat.delete();
+    const fmask = new cv.Mat(gray.rows, gray.cols, cv.CV_8U, new cv.Scalar(0));
+    const contoursVec = new cv.MatVector();
+    contoursVec.push_back(cnt);
+    cv.drawContours(fmask, contoursVec, -1, new cv.Scalar(255), cv.FILLED);
     const color = dominantColor(bgr, fmask);
+    img.delete();
+    bgr.delete();
+    gray.delete();
+    cnt.delete();
+    hull.delete();
     fmask.delete();
+    contoursVec.delete();
     return { area, hullArea, bboxArea, type: shape, vertices, circularity, color };
   } catch (e) {
     return { ...EMPTY, type: 'error', error: e.toString() };
