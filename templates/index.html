@@ -7,30 +7,25 @@
     body { font-family: Arial; text-align: center; padding: 50px; }
     input { width: 80%; padding: 10px; font-size: 16px; }
     button { padding: 10px 20px; font-size: 16px; margin-top: 20px; }
-    pre { text-align: left; margin: 20px auto; max-width: 800px; background: #f8f8f8; padding: 20px; border-radius: 8px; }
+    pre { text-align: left; margin-top: 20px; }
   </style>
-  <script>
-    function submitForm(event) {
-      event.preventDefault();
-      const url = document.getElementById('url').value;
-      fetch(`/?url=${encodeURIComponent(url)}`)
-        .then(response => response.json())
-        .then(data => {
-          document.getElementById('response').textContent = JSON.stringify(data, null, 2);
-        })
-        .catch(error => {
-          document.getElementById('response').textContent = 'Error: ' + error.message;
-        });
-    }
-  </script>
 </head>
 <body>
   <h1>PlatoRelay Key System Bypass</h1>
-  <form onsubmit="submitForm(event)">
-    <input id="url" type="text" placeholder="Paste full auth.platorelay.com URL here" required>
+  <form method="get">
+    <input type="text" name="url" placeholder="Paste full auth.platorelay.com URL here" required>
     <br><br>
     <button type="submit">Bypass & Get FREE Key</button>
   </form>
   <pre id="response"></pre>
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('url')) {
+      fetch(window.location.href)
+        .then(response => response.json())
+        .then(data => document.getElementById('response').textContent = JSON.stringify(data, null, 2))
+        .catch(error => document.getElementById('response').textContent = 'Error: ' + error.message);
+    }
+  </script>
 </body>
 </html>
