@@ -15,7 +15,13 @@ WORKDIR /app
 
 COPY package*.json ./
 
+RUN npm install -g node-gyp
+
 RUN npm install
+
+ENV PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig
+
+RUN cd node_modules/@u4/opencv4nodejs && node-gyp rebuild
 
 COPY . .
 
