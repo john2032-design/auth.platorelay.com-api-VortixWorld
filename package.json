@@ -2,17 +2,17 @@
   "name": "platorelay-api",
   "version": "1.0.0",
   "description": "API for auth.platorelay.com bypass",
-  "main": "api/platorelay.js",  // Adjust to your file name/path
+  "main": "api/platorelay.js",
   "scripts": {
-    "start": "node api/platorelay.js",  // For local testing
-    "build": "npm install"  // Optional: Custom build if needed for native modules
+    "start": "node api/platorelay.js",
+    "build": "npm install"
   },
   "dependencies": {
-    "axios": "^1.7.2",  // For HTTP requests
-    "opencv4nodejs": "^5.0.0"  // For CV/shape analysis (native module; check latest version)
+    "axios": "^1.7.2",
+    "opencv4nodejs": "^5.0.0"
   },
   "engines": {
-    "node": ">=18.0.0"  // Vercel supports up to Node 20; use a recent version for security
+    "node": ">=18.0.0"
   },
   "keywords": ["vercel", "serverless", "api"],
   "author": "Brad",
