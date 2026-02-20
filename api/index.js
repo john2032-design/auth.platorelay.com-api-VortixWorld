@@ -316,7 +316,7 @@ async function handlePlatorelay(axios, url, handlerStart, res, incomingUserId) {
   const finalHtml = response.data;
   await new Promise(r => setTimeout(r, 5000));
   const $final = cheerio.load(finalHtml);
-  const continueButton = $final('button.inline-flex');
+  const continueButton = $final('button:contains("Continue"), button:contains("Lootlabs")');
   if (continueButton.length === 0) {
     return sendError(res, 500, 'Final continue button not found', handlerStart);
   }
