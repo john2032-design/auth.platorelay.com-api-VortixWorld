@@ -15,11 +15,7 @@ WORKDIR /app
 
 COPY package*.json ./
 
-RUN npm install -g node-gyp
-
 RUN npm install
-
-RUN cd node_modules/@u4/opencv4nodejs && node-gyp rebuild
 
 COPY . .
 
