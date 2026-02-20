@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/platorelay.js",  // Path to your API file
+      "use": "@vercel/node"  // Explicitly use Node runtime
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "api/platorelay.js"  // Route all requests to your function
+    }
+  ],
+  "functions": {
+    "api/platorelay.js": {
+      "memory": 1024,  // Increase if CV tasks are memory-heavy (default: 128MB)
+      "maxDuration": 30  // Seconds; increase for long-running PoW solving (default: 10s for Hobby plan)
+    }
+  },
+  "env": {
+    "NODE_ENV": "production"  // Optional: Set environment
+  }
+}
