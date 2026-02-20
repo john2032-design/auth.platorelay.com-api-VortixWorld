@@ -1,4 +1,5 @@
 // api/index.js (directory: api/)
+const cheerio = require('cheerio');
 const getCurrentTime = () => process.hrtime.bigint();
 const formatDuration = (startNs, endNs = process.hrtime.bigint()) => {
   const durationNs = Number(endNs - startNs);
@@ -234,18 +235,16 @@ async function handlePlatorelay(axios, url, handlerStart, res, incomingUserId) {
   } catch (e) {
     return sendError(res, 500, `Failed to fetch initial page: ${e.message}`, handlerStart);
   }
-  const html = response.data;
-  const androidStructure = '<div class="flex flex-col p-6 space-y-1"><h3 class="font-semibold tracking-tight text-2xl text-center">Delta Android Keysystem</h3>';
-  const iosStructure = '<div class="flex flex-col p-6 space-y-1"><h3 class="font-semibold tracking-tight text-2xl text-center">Delta iOS Keysystem</h3>';
-  let isAndroid = html.includes(androidStructure);
-  let isIos = html.includes(iosStructure);
+  const $ = cheerio.load(response.data);
+  const title = $('h3.font-semibold.tracking-tight.text-2xl.text-center').text().trim();
+  let isAndroid = title === 'Delta Android Keysystem';
+  let isIos = title === 'Delta iOS Keysystem';
   if (!isAndroid && !isIos) {
     return sendError(res, 500, 'Unknown keysystem type', handlerStart);
   }
-  let buttonStructure = isAndroid ? '<button class="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none ring-offset-background bg-primary text-primary-foreground hover:bg-primary/90 h-10 w-full p-4" target="_blank">Continue</button>' : '<button class="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none ring-offset-background bg-primary text-primary-foreground hover:bg-primary/90 h-10 w-full p-4" target="_blank">Lootlabs (1 step)</button>';
   await new Promise(r => setTimeout(r, 5000));
-  const buttonIndex = html.indexOf(buttonStructure);
-  if (buttonIndex === -1) {
+  const button = $('button.inline-flex');
+  if (button.length === 0) {
     return sendError(res, 500, 'Button not found', handlerStart);
   }
   let sentryUrl = 'https://sentry.platorelay.com/a?d=' + encodeURIComponent(new URL(url).searchParams.get('d') || '');
@@ -319,22 +318,16 @@ async function handlePlatorelay(axios, url, handlerStart, res, incomingUserId) {
   }
   const finalHtml = response.data;
   await new Promise(r => setTimeout(r, 5000));
-  const continueButton = '<button class="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none ring-offset-background bg-primary text-primary-foreground hover:bg-primary/90 h-10 w-full p-4">Continue</button>';
-  if (!finalHtml.includes(continueButton)) {
+  const $final = cheerio.load(finalHtml);
+  const continueButton = $final('button.inline-flex');
+  if (continueButton.length === 0) {
     return sendError(res, 500, 'Final continue button not found', handlerStart);
   }
-  const keyStructure = '<div class="key-text" id="keyText">';
-  const keyIndex = finalHtml.indexOf(keyStructure);
-  if (keyIndex === -1) {
-    return sendError(res, 500, 'Key not found', handlerStart);
-  }
-  const start = keyIndex + keyStructure.length;
-  const end = finalHtml.indexOf('</div>', start);
-  const key = finalHtml.substring(start, end).trim();
-  if (!key.startsWith('FREE_')) {
+  const keyText = $final('div#keyText').text().trim();
+  if (!keyText.startsWith('FREE_')) {
     return sendError(res, 500, 'Invalid key format', handlerStart);
   }
-  return sendSuccess(res, key, incomingUserId, handlerStart);
+  return sendSuccess(res, keyText, incomingUserId, handlerStart);
 }
 
 module.exports = async (req, res) => {
