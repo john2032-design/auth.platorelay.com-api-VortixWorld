@@ -239,9 +239,6 @@ async function handlePlatorelay(axios, url, handlerStart, res, incomingUserId) {
   const title = $('h3.font-semibold.tracking-tight.text-2xl.text-center').text().trim();
   let isAndroid = title === 'Delta Android Keysystem';
   let isIos = title === 'Delta iOS Keysystem';
-  if (!isAndroid && !isIos) {
-    return sendError(res, 500, 'Unknown keysystem type', handlerStart);
-  }
   await new Promise(r => setTimeout(r, 5000));
   const button = $('button.inline-flex');
   if (button.length === 0) {
