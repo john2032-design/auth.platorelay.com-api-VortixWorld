@@ -1,4 +1,3 @@
-// platorelay.js (directory: root)
 const getCurrentTime = () => process.hrtime.bigint();
 const formatDuration = (startNs, endNs = process.hrtime.bigint()) => {
   const durationNs = Number(endNs - startNs);
@@ -130,7 +129,7 @@ const setCorsHeaders = (req, res) => {
 
 let axiosInstance = null;
 
-const cv = require('opencv4nodejs');
+const cv = require('@u4/opencv4nodejs');
 
 const COLOR_RANGES = {
   red: [[[0, 120, 80], [10, 255, 255]], [[160, 120, 80], [180, 255, 255]]],
