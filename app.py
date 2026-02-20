@@ -1,108 +1,149 @@
-# app.py (directory: root)
-from flask import Flask, request, jsonify, render_template
+# app.py - Main API script using FastAPI
 import time
-import re
-from urllib.parse import urlparse
-from pow_client import handle_platorelay
+from fastapi import FastAPI
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from captcha_solver import solve_stage  # Logic for solving captcha, adapted from pow_client.py
+from abysm_bypass import bypass_link
+from visual_verification import analyze_shape
 
-app = Flask(__name__)
+app = FastAPI()
 
-USER_RATE_LIMIT = {}
+@app.get("/get_key")
+def get_key(start_url: str = "https://auth.platorelay.com"):  # Optional param for start URL if needed
+    driver = webdriver.Chrome()  # Assume ChromeDriver is installed and in PATH
+    try:
+        driver.get(start_url)
+        key = perform_process(driver)
+        return {"key": key}
+    finally:
+        driver.quit()
 
-CONFIG = {
-  'SUPPORTED_METHODS': ['GET', 'POST'],
-  'RATE_LIMIT_WINDOW_MS': 60000,
-  'MAX_REQUESTS_PER_WINDOW': 15
-}
+def perform_process(driver):
+    completed = 0
+    while completed < 2:
+        time.sleep(5)
+        # Check for completed status
+        completed = get_completed_status(driver)
+        if completed >= 2:
+            break
 
-def get_current_time():
-  return time.perf_counter_ns()
+        # Find and click continue button
+        click_continue_button(driver)
 
-def format_duration(start_ns):
-  end_ns = time.perf_counter_ns()
-  duration_ns = end_ns - start_ns
-  duration_sec = duration_ns / 1_000_000_000
-  return f"{abs(duration_sec):.2f}s"
+        # Wait for sentry
+        wait_for_sentry(driver)
 
-def extract_hostname(url):
-  parsed = urlparse(url if url.startswith('http') else 'https://' + url)
-  return parsed.hostname.lower().replace('www.', '') if parsed.hostname else ''
+        # Solve the captcha on sentry
+        solve_captcha_in_browser(driver)
 
-def sanitize_url(url):
-  if not isinstance(url, str): return url
-  return re.sub(r'[\r\n\t]', '', url.strip())
+        # Wait for linkvertise or loot
+        wait_for_bypass_site(driver)
 
-def get_user_id(req):
-  if req.method == 'POST' and req.is_json:
-    data = req.json
-    return data.get('x_user_id') or data.get('x-user-id') or data.get('xUserId') or ''
-  headers = req.headers
-  return headers.get('x-user-id') or headers.get('x_user_id') or headers.get('x-userid') or ''
+        # Bypass using Abysm API
+        current_url = driver.current_url
+        result_url = bypass_link(current_url)
+        if result_url is None:
+            return "Bypass failed"
+        driver.get(result_url)
 
-def send_error(status_code, message, start_time):
-  return jsonify({
-    'status': 'error',
-    'result': message,
-    'time_taken': format_duration(start_time)
-  }), status_code
+        # Back to auth, loop
+    # After 2/2, wait 5s, click continue/create key
+    time.sleep(5)
+    click_create_key_button(driver)
 
-def send_success(result, user_id, start_time):
-  return jsonify({
-    'status': 'success',
-    'result': result,
-    'x_user_id': user_id or '',
-    'time_taken': format_duration(start_time)
-  })
+    # Extract the key
+    key = extract_key(driver)
+    return key
 
-def set_cors_headers(resp):
-  resp.headers['Access-Control-Allow-Origin'] = '*'
-  resp.headers['Access-Control-Allow-Methods'] = 'GET,POST,OPTIONS'
-  resp.headers['Access-Control-Allow-Headers'] = 'Content-Type,x-user-id,x_user_id,x-userid,x-api-key'
-  return resp
+def get_completed_status(driver):
+    try:
+        status_text = driver.find_element(By.XPATH, "//*[contains(text(), 'Completed')]").text
+        if "Completed 0/2" in status_text:
+            return 0
+        elif "Completed 1/2" in status_text:
+            return 1
+        elif "Completed 2/2" in status_text:
+            return 2
+    except NoSuchElementException:
+        pass
+    return 0
 
-@app.route('/', methods=['GET', 'POST', 'OPTIONS'])
-def index():
-  start_time = get_current_time()
-  if request.method == 'OPTIONS':
-    resp = jsonify({})
-    set_cors_headers(resp)
-    return resp, 200
+def click_continue_button(driver):
+    try:
+        button = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.XPATH, '//button[contains(text(), "Continue") or contains(text(), "Lootlabs")]'))
+        )
+        button.click()
+    except TimeoutException:
+        raise ValueError("No continue or Lootlabs button found")
 
-  try:
-    url = request.args.get('url') if request.method == 'GET' else (request.json.get('url') if request.is_json else None)
-    if not url or not isinstance(url, str):
-      resp = send_error(400, 'Missing URL parameter', start_time)[0]
-      set_cors_headers(resp)
-      return resp, 400
+def wait_for_sentry(driver):
+    WebDriverWait(driver, 30).until(
+        lambda d: "sentry.platorelay.com" in d.current_url
+    )
 
-    url = sanitize_url(url)
-    if not re.match(r'^https?://', url, re.I):
-      resp = send_error(400, 'URL must start with http:// or https://', start_time)[0]
-      set_cors_headers(resp)
-      return resp, 400
+def solve_captcha_in_browser(driver):
+    # Assume the page has one stage at a time, loop until not on sentry
+    while "sentry.platorelay.com" in driver.current_url:
+        time.sleep(2)  # Wait for load
+        # Extract instruction
+        try:
+            instruction_elem = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, ".instruction"))  # Assume class 'instruction'
+            )
+            instruction = instruction_elem.text
+        except TimeoutException:
+            raise ValueError("No instruction found on sentry page")
 
-    incoming_user_id = get_user_id(request)
-    user_key = incoming_user_id or request.remote_addr or 'anonymous'
-    now = time.time_ns() // 1_000_000
-    if user_key not in USER_RATE_LIMIT:
-      USER_RATE_LIMIT[user_key] = []
-    times = USER_RATE_LIMIT[user_key]
-    times = [t for t in times if now - t < CONFIG['RATE_LIMIT_WINDOW_MS']]
-    times.append(now)
-    USER_RATE_LIMIT[user_key] = times
-    if len(times) > CONFIG['MAX_REQUESTS_PER_WINDOW']:
-      resp = send_error(429, 'Rate limit reached', start_time)[0]
-      set_cors_headers(resp)
-      return resp, 429
+        # Extract images
+        try:
+            image_elems = WebDriverWait(driver, 10).until(
+                EC.presence_of_all_elements_located((By.CSS_SELECTOR, ".shape-img"))  # Assume class 'shape-img' for imgs
+            )
+        except TimeoutException:
+            raise ValueError("No shape images found on sentry page")
 
-    result = handle_platorelay(url, incoming_user_id)
-    resp = jsonify(result)
-    set_cors_headers(resp)
-    return resp
-  except Exception as e:
-    resp = send_error(500, str(e), start_time)[0]
-    set_cors_headers(resp)
-    return resp, 500
+        shapes = []
+        for elem in image_elems:
+            b64 = elem.get_attribute("src")
+            if b64.startswith("data:"):
+                shapes.append({"img": b64})
 
-if __name__ == '__main__':
-  app.run(host='0.0.0.0', port=3000)
+        # Solve
+        stage = {"instruction": instruction, "shapes": shapes}
+        answer_idx = solve_stage(stage, 0)  # Stage idx not used
+
+        # Click the chosen image
+        image_elems[int(answer_idx)].click()
+
+        # Wait for next stage or redirect
+        time.sleep(2)
+
+def wait_for_bypass_site(driver):
+    WebDriverWait(driver, 30).until(
+        lambda d: "linkvertise" in d.current_url or "loot" in d.current_url
+    )
+
+def click_create_key_button(driver):
+    try:
+        button = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.XPATH, '//button[contains(text(), "Continue") or contains(text(), "Create Key")]'))
+        )
+        button.click()
+    except TimeoutException:
+        raise ValueError("No continue or create key button found")
+
+def extract_key(driver):
+    try:
+        key_elem = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.XPATH, "//*[starts-with(text(), 'FREE_')]"))
+        )
+        return key_elem.text
+    except TimeoutException:
+        raise ValueError("No FREE_ key found")
+
+# Run with uvicorn app:app --reload
