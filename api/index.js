@@ -1,3 +1,4 @@
+// api/index.js (directory: api/)
 const getCurrentTime = () => process.hrtime.bigint();
 const formatDuration = (startNs, endNs = process.hrtime.bigint()) => {
   const durationNs = Number(endNs - startNs);
