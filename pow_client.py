@@ -141,106 +141,105 @@ def _json_area(s: Dict[str, Any]) -> float:
   return 0.0
 
 def _is_ambiguous(t: str) -> bool:
-  return not t or t in ("unknown", "error", "no_contour") or t.startswith("unknown-")
+    return not t or t in ("unknown", "error", "no_contour") or t.startswith("unknown-")
 
 def _type_matches_strict(detected: str, target: str) -> bool:
-  if _is_ambiguous(detected):
-    return False
-  if target == "circle":
-    return "circle" in detected
-  if target in detected:
-    return True
-  try:
-    return abs(_POLY_ORDER.index(target) - _POLY_ORDER.index(detected)) <= 1
-  except ValueError:
-    return False
+    if _is_ambiguous(detected):
+        return False
+    if target == "circle":
+        return "circle" in detected
+    if target in detected:
+        return True
+    try:
+        return abs(_POLY_ORDER.index(target) - _POLY_ORDER.index(detected)) <= 1
+    except ValueError:
+        return False
 
 def _type_confidence(detected: str, target: str) -> float:
-  if not target:
-    return 1.0
-  if _is_ambiguous(detected):
+    if not target:
+        return 1.0
+    if _is_ambiguous(detected):
+        return 0.0
+    if target == "circle" and "circle" in detected:
+        return 1.0
+    if target != "circle" and target in detected:
+        return 1.0
+    try:
+        if abs(_POLY_ORDER.index(target) - _POLY_ORDER.index(detected)) == 1:
+            return 0.7
+    except ValueError:
+        pass
     return 0.0
-  if target == "circle" and "circle" in detected:
-    return 1.0
-  if target != "circle" and target in detected:
-    return 1.0
-  try:
-    if abs(_POLY_ORDER.index(target) - _POLY_ORDER.index(detected)) == 1:
-      return 0.7
-  except ValueError:
-    pass
-  return 0.0
 
 def solve_stage(stage: Dict[str, Any], stage_idx: int) -> str:
-  instruction = stage.get("instruction") or ""
-  shapes: List[Dict[str, Any]] = stage.get("shapes") or []
+    instruction = stage.get("instruction") or ""
+    shapes: List[Dict[str, Any]] = stage.get("shapes") or []
 
-  target_type, target_color, want_smallest, want_largest = _parse_instruction(instruction)
+    target_type, target_color, want_smallest, want_largest = _parse_instruction(instruction)
 
-  print(f"\n  [Stage {stage_idx}] \"{instruction}\"")
-  print(f"  target_type={target_type!r}  target_color={target_color!r}  "
-        f"shapes={len(shapes)}  want_smallest={want_smallest}")
+    print(f"\n  [Stage {stage_idx}] \"{instruction}\"")
+    print(f"  target_type={target_type!r}  target_color={target_color!r}  "
+          f"shapes={len(shapes)}  want_smallest={want_smallest}")
 
-  if not shapes:
-    print("  WARNING: no shapes"); return "0"
+    if not shapes:
+        print("  WARNING: no shapes"); return "0"
 
-  os.makedirs("debug_captchas", exist_ok=True)
+    os.makedirs("debug_captchas", exist_ok=True)
 
-  for idx, s in enumerate(shapes):
-    b64 = s.get("img")
-    if not b64:
-      s["visual"] = dict(area=0.0, type="unknown", vertices=0,
-                         circularity=0.0, color="unknown", hull_area=0.0)
-      continue
+    for idx, s in enumerate(shapes):
+        b64 = s.get("img")
+        if not b64:
+            s["visual"] = dict(area=0.0, type="unknown", vertices=0,
+                               circularity=0.0, color="unknown", hull_area=0.0)
+            continue
 
-    vis = analyze_shape(b64)
-    s["visual"] = vis
+        vis = analyze_shape(b64)
+        s["visual"] = vis
 
-    if os.environ.get("COLLECT_DATASET"):
-      save_to_dataset(b64, vis, instruction)
+        if os.environ.get("COLLECT_DATASET"):
+            save_to_dataset(b64, vis, instruction)
 
-    try:
-      raw = b64.split(",")[1] if "," in b64 else b64
-      with open(f"debug_captchas/s{stage_idx}_i{idx}_{vis['type']}.png", "wb") as f:
-        f.write(base64.b64decode(raw))
-    except Exception:
-      pass
+        try:
+            raw = b64.split(",")[1] if "," in b64 else b64
+            with open(f"debug_captchas/s{stage_idx}_i{idx}_{vis['type']}.png", "wb") as f:
+                f.write(base64.b64decode(raw))
+        except Exception:
+            pass
 
-    passes = _type_matches_strict(vis['type'], target_type) if target_type else True
-    print(f"    [{idx}] {vis['type']:<12} {vis.get('color','?'):<8} "
-          f"area={vis['area']:>7.0f}  hull={vis.get('hull_area',0):>7.0f}  "
-          f"v={vis['vertices']}  c={vis.get('circularity',0):.2f}  "
-          f"{'✓' if passes else '✗'}")
+        passes = _type_matches_strict(vis['type'], target_type) if target_type else True
+        print(f"    [{idx}] {vis['type']:<12} {vis.get('color','?'):<8} "
+              f"area={vis['area']:>7.0f}  hull={vis.get('hull_area',0):>7.0f}  "
+              f"v={vis['vertices']}  c={vis.get('circularity',0):.2f}  "
+              f"{'✓' if passes else '✗'}")
 
-  if target_type:
-    candidates = [s for s in shapes
-                  if _type_matches_strict(s.get("visual", {}).get("type", ""), target_type)]
-  else:
-    candidates = list(shapes)
+    if target_type:
+        candidates = [s for s in shapes
+                      if _type_matches_strict(s.get("visual", {}).get("type", ""), target_type)]
+    else:
+        candidates = list(shapes)
 
-  if target_color:
-    cc = [s for s in candidates
-          if s.get("visual", {}).get("color", "unknown") in ("unknown", target_color)]
-    if cc:
-      candidates = cc
+    if target_color:
+        cc = [s for s in candidates
+              if s.get("visual", {}).get("color", "unknown") in ("unknown", target_color)]
+        if cc:
+            candidates = cc
 
-  if not candidates:
-    candidates = list(shapes)
+    if not candidates:
+        candidates = list(shapes)
 
-  print(f"  [Filter] {len(candidates)}/{len(shapes)} candidates")
+    print(f"  [Filter] {len(candidates)}/{len(shapes)} candidates")
 
-  def sort_key(s):
-    vis  = s.get("visual", {})
-    area = vis.get("area", _json_area(s))
-    conf = _type_confidence(vis.get("type", ""), target_type)
-    return (area, conf) if want_smallest else (-area, conf)
+    def sort_key(s):
+        vis  = s.get("visual", {})
+        area = vis.get("area", _json_area(s))
+        conf = _type_confidence(vis.get("type", ""), target_type)
+        return (area, conf) if want_smallest else (-area, conf)
 
-  candidates.sort(key=sort_key, reverse=want_largest)
-  chosen = candidates[0]
-  return str(shapes.index(chosen))
+    candidates.sort(key=sort_key, reverse=want_largest)
+    chosen = candidates[0]
+    return str(shapes.index(chosen))
 
 def handle_platorelay(url, incoming_user_id):
-    start_time = get_current_time()
     cj = http.cookiejar.CookieJar()
     opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
     try:
@@ -248,16 +247,16 @@ def handle_platorelay(url, incoming_user_id):
         response = opener.open(req)
         html = response.read().decode("utf-8")
     except Exception as e:
-        return {"status": "error", "result": f"Failed to fetch initial page: {str(e)}", "time_taken": format_duration(start_time)}
+        return {"status": "error", "result": f"Failed to fetch initial page: {str(e)}", "time_taken": "0.00s"}
     soup = BeautifulSoup(html, "html.parser")
     title = soup.find("h3", {"class": "font-semibold tracking-tight text-2xl text-center"})
     title_text = title.text.strip() if title else ""
     is_android = "Android" in title_text
     is_ios = "iOS" in title_text
     time.sleep(5)
-    button = soup.find_all("button", recursive=True)
+    button = soup.find("button", string=re.compile("Continue|Lootlabs", re.I))
     if not button:
-        return {"status": "error", "result": "Button not found", "time_taken": format_duration(start_time)}
+        return {"status": "error", "result": "Button not found", "time_taken": "0.00s"}
     d = url.split("d=")[-1].split("&")[0] if "d=" in url else ""
     sentry_url = f"https://sentry.platorelay.com/a?d={urllib.parse.quote(d)}"
     referer = sentry_url
@@ -266,16 +265,16 @@ def handle_platorelay(url, incoming_user_id):
     try:
         status, reason, body, parsed = send(opener, REQUEST_URL, req_pl, headers)
     except Exception as e:
-        return {"status": "error", "result": f"Captcha request failed: {str(e)}", "time_taken": format_duration(start_time)}
+        return {"status": "error", "result": f"Captcha request failed: {str(e)}", "time_taken": "0.00s"}
     if not parsed or not parsed.get("success"):
-        return {"status": "error", "result": parsed.get("error") or "Captcha request failed", "time_taken": format_duration(start_time)}
+        return {"status": "error", "result": parsed.get("error") or "Captcha request failed", "time_taken": "0.00s"}
     data = parsed.get("data", {})
     puzzle_id = data.get("id")
     if not puzzle_id:
-        return {"status": "error", "result": "No puzzle ID", "time_taken": format_duration(start_time)}
+        return {"status": "error", "result": "No puzzle ID", "time_taken": "0.00s"}
     stages = data.get("stages") or ([data.get("puzzle")] if data.get("puzzle") else [])
     if not stages:
-        return {"status": "error", "result": "No stages", "time_taken": format_duration(start_time)}
+        return {"status": "error", "result": "No stages", "time_taken": "0.00s"}
     answers = []
     for i, stage in enumerate(stages):
         answers.append(solve_stage(stage, i))
@@ -285,18 +284,18 @@ def handle_platorelay(url, incoming_user_id):
     try:
         status, reason, body, pv = send(opener, VERIFY_URL, ver_pl, headers)
     except Exception as e:
-        return {"status": "error", "result": f"Captcha verify failed: {str(e)}", "time_taken": format_duration(start_time)}
+        return {"status": "error", "result": f"Captcha verify failed: {str(e)}", "time_taken": "0.00s"}
     if not pv or not pv.get("success"):
-        return {"status": "error", "result": pv.get("error") or "Captcha verify failed", "time_taken": format_duration(start_time)}
+        return {"status": "error", "result": pv.get("error") or "Captcha verify failed", "time_taken": "0.00s"}
     next_url = pv.get("data", {}).get("result") or pv.get("result") or pv.get("token")
     if not next_url or not next_url.startswith("https://"):
-        return {"status": "error", "result": "No next URL after captcha", "time_taken": format_duration(start_time)}
+        return {"status": "error", "result": "No next URL after captcha", "time_taken": "0.00s"}
     hostname = extract_hostname(next_url)
     api_chain = get_api_chain(hostname)
     if api_chain:
         bypass_result = execute_api_chain(next_url, api_chain)
         if not bypass_result["success"]:
-            return {"status": "error", "result": bypass_result["error"] or "Bypass failed", "time_taken": format_duration(start_time)}
+            return {"status": "error", "result": bypass_result["error"] or "Bypass failed", "time_taken": "0.00s"}
         next_url = bypass_result["result"]
     if is_ios:
         hostname = extract_hostname(next_url)
@@ -304,21 +303,21 @@ def handle_platorelay(url, incoming_user_id):
         if api_chain:
             bypass_result = execute_api_chain(next_url, api_chain)
             if not bypass_result["success"]:
-                return {"status": "error", "result": bypass_result["error"] or "Second bypass failed", "time_taken": format_duration(start_time)}
+                return {"status": "error", "result": bypass_result["error"] or "Second bypass failed", "time_taken": "0.00s"}
             next_url = bypass_result["result"]
     try:
         req = urllib.request.Request(next_url, headers={"Accept": "text/html"})
         response = opener.open(req)
         final_html = response.read().decode("utf-8")
     except Exception as e:
-        return {"status": "error", "result": f"Failed to fetch final page: {str(e)}", "time_taken": format_duration(start_time)}
+        return {"status": "error", "result": f"Failed to fetch final page: {str(e)}", "time_taken": "0.00s"}
     time.sleep(5)
     soup_final = BeautifulSoup(final_html, "html.parser")
     key_text = soup_final.find("div", id="keyText")
     key = key_text.text.strip() if key_text else ""
     if not key.startswith("FREE_"):
-        return {"status": "error", "result": "Invalid key format", "time_taken": format_duration(start_time)}
-    return {"status": "success", "result": key, "x_user_id": incoming_user_id or "", "time_taken": format_duration(start_time)}
+        return {"status": "error", "result": "Invalid key format", "time_taken": "0.00s"}
+    return {"status": "success", "result": key, "x_user_id": incoming_user_id or "", "time_taken": "0.00s"}
 
 def get_api_chain(hostname):
   for host, apis in HOST_RULES.items():
