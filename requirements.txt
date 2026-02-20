@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+selenium
+requests
+opencv-python
+numpy
+# Add any others if missing, e.g., for visual_verification.py or pow_client.py
