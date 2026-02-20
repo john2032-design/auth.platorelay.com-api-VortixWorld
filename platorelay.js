@@ -504,7 +504,6 @@ async function handlePlatorelay(axios, url, handlerStart, res, incomingUserId) {
   if (!isAndroid && !isIos) {
     return sendError(res, 500, 'Unknown keysystem type', handlerStart);
   }
-  const steps = isAndroid ? 1 : 2;
   let buttonStructure = isAndroid ? '<button class="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none ring-offset-background bg-primary text-primary-foreground hover:bg-primary/90 h-10 w-full p-4" target="_blank">Continue</button>' : '<button class="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none ring-offset-background bg-primary text-primary-foreground hover:bg-primary/90 h-10 w-full p-4" target="_blank">Lootlabs (1 step)</button>';
   await new Promise(r => setTimeout(r, 5000));
   const buttonIndex = html.indexOf(buttonStructure);
