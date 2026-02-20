@@ -17,6 +17,8 @@ COPY package*.json ./
 
 RUN npm install
 
+RUN node -e "const {OpenCVBuilder} = require('@u4/opencv-build'); (async () => { const builder = new OpenCVBuilder(); try { await builder.build(); console.log('OpenCV built successfully'); } catch (e) { console.error('Build failed:', e); process.exit(1); } })();"
+
 COPY . .
 
 EXPOSE 3000
