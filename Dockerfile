@@ -19,7 +19,8 @@ RUN npm install -g node-gyp
 
 RUN npm install
 
-RUN sed -i '/"include_dirs": \[/a \        "/usr/include/opencv4",' node_modules/@u4/opencv4nodejs/binding.gyp
+# Force-set include path in binding.gyp by overwriting the include_dirs section
+RUN sed -i '/"include_dirs": \[/,/]/c\    "include_dirs": [\n        "<(opencv_include_dir)",\n        "/usr/include/opencv4",\n        "/usr/include/opencv4/opencv2",\n        "<(node_root_dir)/include/node",\n        "<(node_root_dir)/deps/v8/include"\n    ]' node_modules/@u4/opencv4nodejs/binding.gyp
 
 RUN cd node_modules/@u4/opencv4nodejs && node-gyp rebuild
 
