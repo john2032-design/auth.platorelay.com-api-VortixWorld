@@ -1,3 +1,4 @@
+# pow_client.py (directory: root)
 import json
 import math
 import random
@@ -9,7 +10,7 @@ from typing import Any, Dict, List
 from visual_verification import analyze_shape, save_to_dataset
 
 REQUEST_URL = "https://sentry.platorelay.com/.gs/pow/captcha/request"
-VERIFY_URL  = "https://sentry.platorelay.com/.gs/pow/captcha/verify"
+VERIFY_URL = "https://sentry.platorelay.com/.gs/pow/captcha/verify"
 
 BASE_HEADERS = {
     "Accept": "*/*",
@@ -140,98 +141,103 @@ def _json_area(s: Dict[str, Any]) -> float:
   return 0.0
 
 def _is_ambiguous(t: str) -> bool:
-    return not t or t in ("unknown", "error", "no_contour") or t.startswith("unknown-")
+  return not t or t in ("unknown", "error", "no_contour") or t.startswith("unknown-")
 
 def _type_matches_strict(detected: str, target: str) -> bool:
-    if _is_ambiguous(detected):
-        return False
-    if target == "circle":
-        return "circle" in detected
-    if target in detected:
-        return True
-    try:
-        return abs(_POLY_ORDER.index(target) - _POLY_ORDER.index(detected)) <= 1
-    except ValueError:
-        return False
+  if _is_ambiguous(detected):
+    return False
+  if target == "circle":
+    return "circle" in detected
+  if target in detected:
+    return True
+  try:
+    return abs(_POLY_ORDER.index(target) - _POLY_ORDER.index(detected)) <= 1
+  except ValueError:
+    return False
 
 def _type_confidence(detected: str, target: str) -> float:
-    if not target:
-        return 1.0
-    if _is_ambiguous(detected):
-        return 0.0
-    if target == "circle" and "circle" in detected:
-        return 1.0
-    if target != "circle" and target in detected:
-        return 1.0
-    try:
-        if abs(_POLY_ORDER.index(target) - _POLY_ORDER.index(detected)) == 1:
-            return 0.7
-    except ValueError:
-        pass
+  if not target:
+    return 1.0
+  if _is_ambiguous(detected):
     return 0.0
+  if target == "circle" and "circle" in detected:
+    return 1.0
+  if target != "circle" and target in detected:
+    return 1.0
+  try:
+    if abs(_POLY_ORDER.index(target) - _POLY_ORDER.index(detected)) == 1:
+      return 0.7
+  except ValueError:
+    pass
+  return 0.0
 
 def solve_stage(stage: Dict[str, Any], stage_idx: int) -> str:
-    instruction = stage.get("instruction") or ""
-    shapes = stage.get("shapes") or []
+  instruction = stage.get("instruction") or ""
+  shapes: List[Dict[str, Any]] = stage.get("shapes") or []
 
-    target_type, target_color, want_smallest, want_largest = _parse_instruction(instruction)
+  target_type, target_color, want_smallest, want_largest = _parse_instruction(instruction)
 
-    if not shapes:
-        print("  WARNING: no shapes"); return "0"
+  print(f"\n  [Stage {stage_idx}] \"{instruction}\"")
+  print(f"  target_type={target_type!r}  target_color={target_color!r}  "
+        f"shapes={len(shapes)}  want_smallest={want_smallest}")
 
-    os.makedirs("debug_captchas", exist_ok=True)
+  if not shapes:
+    print("  WARNING: no shapes"); return "0"
 
-    for idx, s in enumerate(shapes):
-        b64 = s.get("img")
-        if not b64:
-            s["visual"] = {"area": 0.0, "type": "unknown", "vertices": 0, "circularity": 0.0, "color": "unknown"}
-            continue
+  os.makedirs("debug_captchas", exist_ok=True)
 
-        vis = analyze_shape(b64)
-        s["visual"] = vis
+  for idx, s in enumerate(shapes):
+    b64 = s.get("img")
+    if not b64:
+      s["visual"] = dict(area=0.0, type="unknown", vertices=0,
+                         circularity=0.0, color="unknown", hull_area=0.0)
+      continue
 
-        if os.environ.get("COLLECT_DATASET"):
-            save_to_dataset(b64, vis, instruction)
+    vis = analyze_shape(b64)
+    s["visual"] = vis
 
-        try:
-            raw = b64.split(",")[1] if "," in b64 else b64
-            with open(f"debug_captchas/s{stage_idx}_i{idx}_{vis['type']}.png", "wb") as f:
-                f.write(base64.b64decode(raw))
-        except Exception:
-            pass
+    if os.environ.get("COLLECT_DATASET"):
+      save_to_dataset(b64, vis, instruction)
 
-        passes = _type_matches_strict(vis['type'], target_type) if target_type else True
-        print(f"    [{idx}] {vis['type']:<12} {vis.get('color','?'):<8} "
-              f"area={vis['area']:>7.0f}  hull={vis.get('hull_area',0):>7.0f}  "
-              f"v={vis['vertices']}  c={vis['circularity']:.2f}  "
-              f"{'✓' if passes else '✗'}")
+    try:
+      raw = b64.split(",")[1] if "," in b64 else b64
+      with open(f"debug_captchas/s{stage_idx}_i{idx}_{vis['type']}.png", "wb") as f:
+        f.write(base64.b64decode(raw))
+    except Exception:
+      pass
 
-    if target_type:
-        candidates = [s for s in shapes
-                      if _type_matches_strict(s.get("visual", {}).get("type", ""), target_type)]
-    else:
-        candidates = list(shapes)
+    passes = _type_matches_strict(vis['type'], target_type) if target_type else True
+    print(f"    [{idx}] {vis['type']:<12} {vis.get('color','?'):<8} "
+          f"area={vis['area']:>7.0f}  hull={vis.get('hull_area',0):>7.0f}  "
+          f"v={vis['vertices']}  c={vis.get('circularity',0):.2f}  "
+          f"{'✓' if passes else '✗'}")
 
-    if target_color:
-        cc = [s for s in candidates
-              if s.get("visual", {}).get("color", "unknown") in ("unknown", target_color)]
-        if cc:
-            candidates = cc
+  if target_type:
+    candidates = [s for s in shapes
+                  if _type_matches_strict(s.get("visual", {}).get("type", ""), target_type)]
+  else:
+    candidates = list(shapes)
 
-    if not candidates:
-        candidates = list(shapes)
+  if target_color:
+    cc = [s for s in candidates
+          if s.get("visual", {}).get("color", "unknown") in ("unknown", target_color)]
+    if cc:
+      candidates = cc
 
-    print(f"  [Filter] {len(candidates)}/{len(shapes)} candidates")
+  if not candidates:
+    candidates = list(shapes)
 
-    def sort_key(s):
-        vis  = s.get("visual", {})
-        area = vis.get("area") or _json_area(s)
-        conf = _type_confidence(vis.get("type", ""), target_type)
-        return (area, conf) if want_smallest else (-area, conf)
+  print(f"  [Filter] {len(candidates)}/{len(shapes)} candidates")
 
-    candidates.sort(key=sort_key, reverse=not want_smallest)
-    chosen = candidates[0]
-    return str(shapes.index(chosen))
+  def sort_key(s):
+    vis  = s.get("visual", {})
+    area = vis.get("area", _json_area(s))
+    conf = _type_confidence(vis.get("type", ""), target_type)
+    return (area, conf) if want_smallest else (-area, conf)
+
+  candidates.sort(key=sort_key, reverse=want_largest)
+  chosen = candidates[0]
+  return str(shapes.index(chosen))
 
 def handle_platorelay(url, incoming_user_id):
     start_time = get_current_time()
@@ -249,7 +255,7 @@ def handle_platorelay(url, incoming_user_id):
     is_android = "Android" in title_text
     is_ios = "iOS" in title_text
     time.sleep(5)
-    button = soup.find("button", string=re.compile("Continue|Lootlabs", re.I))
+    button = soup.find_all("button", recursive=True)
     if not button:
         return {"status": "error", "result": "Button not found", "time_taken": format_duration(start_time)}
     d = url.split("d=")[-1].split("&")[0] if "d=" in url else ""
@@ -313,3 +319,35 @@ def handle_platorelay(url, incoming_user_id):
     if not key.startswith("FREE_"):
         return {"status": "error", "result": "Invalid key format", "time_taken": format_duration(start_time)}
     return {"status": "success", "result": key, "x_user_id": incoming_user_id or "", "time_taken": format_duration(start_time)}
+
+def get_api_chain(hostname):
+  for host, apis in HOST_RULES.items():
+    if hostname == host or hostname.endswith('.' + host):
+      return apis.copy()
+  return []
+
+def execute_api_chain(url, api_names):
+  for name in api_names:
+    if name == 'abysm':
+      result = try_abysm(url)
+      if result['success']:
+        return result
+  return {"success": False, "error": "All bypasses failed"}
+
+def try_abysm(url):
+  try:
+    res = requests.get('https://api.abysm.lat/v2/bypass', params={'url': url}, headers={'x-api-key': 'ABYSM-185EF369-E519-4670-969E-137F07BB52B8'})
+    d = res.json()
+    if d.get('status') == 'success' and d.get('data', {}).get('result'):
+      return {"success": True, "result": d['data']['result']}
+    if d.get('result'):
+      return {"success": True, "result": d['result']}
+    error_msg = d.get('error') or d.get('message') or None
+    if error_msg and any(x in error_msg.lower() for x in ['error', 'fail', 'failed']):
+      error_msg = 'Bypass Failed'
+    return {"success": False, "error": error_msg}
+  except Exception as e:
+    error_msg = str(e)
+    if any(x in error_msg.lower() for x in ['error', 'fail', 'failed']):
+      error_msg = 'Bypass Failed'
+    return {"success": False, "error": error_msg}
